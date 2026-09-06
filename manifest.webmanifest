@@ -1,0 +1,12 @@
+{
+  "name": "NextCRM",
+  "short_name": "NextCRM",
+  "description": "CRM та операційний центр для українського e-commerce",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#112E5A",
+  "icons": [
+    {"src":"/assets/favicon.svg","sizes":"any","type":"image/svg+xml"}
+  ]
+}
