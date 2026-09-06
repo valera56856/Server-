@@ -35,26 +35,42 @@ jobs:
           import hashlib
           import re
 
-          expected = "8c236be42f51470397cbdf59e760c8f6bc13c19cad852802fcbe54ac0ff56126"
+          expected_zip = "8c236be42f51470397cbdf59e760c8f6bc13c19cad852802fcbe54ac0ff56126"
+          expected_parts = {
+              "part-00.b64": (16000, "47b35d023d059c9447826c6f0a2a8c4587288e59aabe487c2693659ec2f77add"),
+              "part-01.b64": (16000, "b7131745d28004e1b18caa6ef0549f5bfb2abf66825eb1917f65e98512845017"),
+              "part-02.b64": (16000, "7d578ce4fd3f9b1f20a5f96a9e79e74fc8140324ad1e5e79241bd8ce697380fd"),
+              "part-03.b64": (16000, "87dce7420ba7994b684129912ba507cce8ba218a1d0e5263457d579baf38cb6d"),
+              "part-04.b64": (16000, "0fb9c4a3891f2377760bbdb15c853c9906e6f59420ac3750d69e142875d07422"),
+              "part-05.b64": (16000, "644b8522e5f43e5f0e314b8168bacd61b1f557957192f8d6f751301f1a834634"),
+              "part-06.b64": (10412, "30be59116f02dc266af8016ab5f8bf8e811a0765da116e661a8fa3cc05acc903"),
+          }
           parts = sorted(glob.glob("preview-payload/part-*.b64"))
           if len(parts) != 7:
               raise SystemExit(f"Expected 7 payload parts, found {len(parts)}")
 
           chunks = []
+          errors = []
           for path in parts:
+              name = Path(path).name
               text = Path(path).read_text(encoding="utf-8-sig")
               clean = re.sub(r"[^A-Za-z0-9+/=]", "", text)
-              print(f"{path}: source={len(text)} clean={len(clean)}")
-              if len(clean) % 4:
-                  raise SystemExit(f"Invalid Base64 length in {path}: {len(clean)}")
+              actual_hash = hashlib.sha256(clean.encode("ascii")).hexdigest()
+              expected_len, expected_hash = expected_parts[name]
+              print(f"{name}: source={len(text)} clean={len(clean)} sha256={actual_hash}")
+              if len(clean) != expected_len or actual_hash != expected_hash:
+                  errors.append(name)
               chunks.append(clean)
+
+          if errors:
+              raise SystemExit("Payload part mismatch: " + ", ".join(errors))
 
           encoded = "".join(chunks)
           raw = base64.b64decode(encoded, validate=True)
-          actual = hashlib.sha256(raw).hexdigest()
-          print(f"decoded={len(raw)} sha256={actual}")
-          if actual != expected:
-              raise SystemExit(f"Payload checksum mismatch: expected {expected}, got {actual}")
+          actual_zip = hashlib.sha256(raw).hexdigest()
+          print(f"decoded={len(raw)} sha256={actual_zip}")
+          if actual_zip != expected_zip:
+              raise SystemExit(f"Payload checksum mismatch: expected {expected_zip}, got {actual_zip}")
           Path("/tmp/nextcrm-preview.zip").write_bytes(raw)
           PY
           unzip -q /tmp/nextcrm-preview.zip -d /tmp/nextcrm-public
