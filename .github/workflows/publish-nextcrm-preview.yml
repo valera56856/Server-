@@ -31,41 +31,46 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import base64
-          import glob
           import hashlib
           import re
 
           expected_zip = "8c236be42f51470397cbdf59e760c8f6bc13c19cad852802fcbe54ac0ff56126"
-          expected_parts = {
-              "part-00.b64": (16000, "47b35d023d059c9447826c6f0a2a8c4587288e59aabe487c2693659ec2f77add"),
-              "part-01.b64": (16000, "b7131745d28004e1b18caa6ef0549f5bfb2abf66825eb1917f65e98512845017"),
-              "part-02.b64": (16000, "7d578ce4fd3f9b1f20a5f96a9e79e74fc8140324ad1e5e79241bd8ce697380fd"),
-              "part-03.b64": (16000, "87dce7420ba7994b684129912ba507cce8ba218a1d0e5263457d579baf38cb6d"),
-              "part-04.b64": (16000, "0fb9c4a3891f2377760bbdb15c853c9906e6f59420ac3750d69e142875d07422"),
-              "part-05.b64": (16000, "644b8522e5f43e5f0e314b8168bacd61b1f557957192f8d6f751301f1a834634"),
-              "part-06.b64": (10412, "30be59116f02dc266af8016ab5f8bf8e811a0765da116e661a8fa3cc05acc903"),
-          }
-          parts = sorted(glob.glob("preview-payload/part-*.b64"))
-          if len(parts) != 7:
-              raise SystemExit(f"Expected 7 payload parts, found {len(parts)}")
+          ordered_parts = [
+              ("preview-payload/repair-00-0.b64", 4000, "acb29d36ef4f0e1668b1380c408d9870f54e752f933842b721cb60351abb15ed"),
+              ("preview-payload/repair-00-1.b64", 4000, "1e33e564a14c4f22026c8787286041c2acfc207c36cae153cf1333b673662c7d"),
+              ("preview-payload/repair-00-2.b64", 4000, "fe5c03abf3f998d3dc900b61beae272f8692581902365e98d6cfbbf1eeb8292e"),
+              ("preview-payload/repair-00-3.b64", 4000, "a8f522e6ffe3386e775fff4e5b1cfa8b295add9a0c2ee4e1fa2eb54c5044e14a"),
+              ("preview-payload/repair-01-0.b64", 4000, "2dda265a025124f809a189520f5c5db19cefd11c22e8cbba24f971b11f8ff88a"),
+              ("preview-payload/repair-01-1.b64", 4000, "3aa0c651d5b52f23fcf312808ba392adc8b0c651c9d4d568bddc9f686484e1b1"),
+              ("preview-payload/repair-01-2.b64", 4000, "dd5e8a6b8910fb15cc3d1b76618f553a1e2bbf72ea248ad3c40501448b4b5d88"),
+              ("preview-payload/repair-01-3.b64", 4000, "66d7f2eb10c46fb57635a29e4ace55b6c39314630aa8f32ff6b36bfb37074e83"),
+              ("preview-payload/part-02.b64", 16000, "7d578ce4fd3f9b1f20a5f96a9e79e74fc8140324ad1e5e79241bd8ce697380fd"),
+              ("preview-payload/part-03.b64", 16000, "87dce7420ba7994b684129912ba507cce8ba218a1d0e5263457d579baf38cb6d"),
+              ("preview-payload/repair-04-0.b64", 4000, "2bb45ad532ae9d5e6f0341dc860c45f6232fdddf7a10c5fe95f12d1c328940e5"),
+              ("preview-payload/repair-04-1.b64", 4000, "0de063a1725cc33c0814ff2ac9adf1ea2c8da59ba0db768e6451986999dfec53"),
+              ("preview-payload/repair-04-2.b64", 4000, "a275bbe483a0da45e94bd0d22b3b103fbf0fc022416ac750ba8c81eb7f02353c"),
+              ("preview-payload/repair-04-3.b64", 4000, "039da6bf2836771c4d657c6712909073589a562a9835a2af46f0e03ab04cc138"),
+              ("preview-payload/part-05.b64", 16000, "644b8522e5f43e5f0e314b8168bacd61b1f557957192f8d6f751301f1a834634"),
+              ("preview-payload/part-06.b64", 10412, "30be59116f02dc266af8016ab5f8bf8e811a0765da116e661a8fa3cc05acc903"),
+          ]
 
           chunks = []
           errors = []
-          for path in parts:
-              name = Path(path).name
+          for path, expected_len, expected_hash in ordered_parts:
               text = Path(path).read_text(encoding="utf-8-sig")
               clean = re.sub(r"[^A-Za-z0-9+/=]", "", text)
               actual_hash = hashlib.sha256(clean.encode("ascii")).hexdigest()
-              expected_len, expected_hash = expected_parts[name]
-              print(f"{name}: source={len(text)} clean={len(clean)} sha256={actual_hash}")
+              print(f"{path}: source={len(text)} clean={len(clean)} sha256={actual_hash}")
               if len(clean) != expected_len or actual_hash != expected_hash:
-                  errors.append(name)
+                  errors.append(path)
               chunks.append(clean)
 
           if errors:
-              raise SystemExit("Payload part mismatch: " + ", ".join(errors))
+              raise SystemExit("Payload source mismatch: " + ", ".join(errors))
 
           encoded = "".join(chunks)
+          if len(encoded) != 106412:
+              raise SystemExit(f"Unexpected encoded payload length: {len(encoded)}")
           raw = base64.b64decode(encoded, validate=True)
           actual_zip = hashlib.sha256(raw).hexdigest()
           print(f"decoded={len(raw)} sha256={actual_zip}")
@@ -78,7 +83,13 @@ jobs:
           printf '%s\n' "Published from ${GITHUB_SHA}" > /tmp/nextcrm-public/PREVIEW_BUILD.txt
           test -f /tmp/nextcrm-public/index.html
           test -f /tmp/nextcrm-public/product.html
+          test -f /tmp/nextcrm-public/integrations.html
           test -f /tmp/nextcrm-public/pricing.html
+          test -f /tmp/nextcrm-public/compare-excel.html
+          test -f /tmp/nextcrm-public/about.html
+          test -f /tmp/nextcrm-public/contact.html
+          test -f /tmp/nextcrm-public/demo.html
+          test -f /tmp/nextcrm-public/404.html
           test -f /tmp/nextcrm-public/assets/styles.css
           test -f /tmp/nextcrm-public/assets/app.js
 
