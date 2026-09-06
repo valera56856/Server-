@@ -1,0 +1,1 @@
+Trigger NextCRM preview publish from the isolated preview repository.
