@@ -1,0 +1,52 @@
+name: Publish NextCRM preview
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "preview-payload/**"
+      - ".github/workflows/publish-nextcrm-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nextcrm-preview-publish
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview source
+        uses: actions/checkout@v4
+
+      - name: Rebuild static site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/nextcrm-public
+          cat preview-payload/part-*.b64 | tr -d '\n\r' | base64 --decode > /tmp/nextcrm-preview.zip
+          echo "8c236be42f51470397cbdf59e760c8f6bc13c19cad852802fcbe54ac0ff56126  /tmp/nextcrm-preview.zip" | sha256sum --check --strict
+          unzip -q /tmp/nextcrm-preview.zip -d /tmp/nextcrm-public
+          touch /tmp/nextcrm-public/.nojekyll
+          printf '%s\n' "Published from ${GITHUB_SHA}" > /tmp/nextcrm-public/PREVIEW_BUILD.txt
+          test -f /tmp/nextcrm-public/index.html
+          test -f /tmp/nextcrm-public/assets/styles.css
+          test -f /tmp/nextcrm-public/assets/app.js
+
+      - name: Publish isolated gh-pages branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd /tmp/nextcrm-public
+          git init -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Publish NextCRM live preview from ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin gh-pages
