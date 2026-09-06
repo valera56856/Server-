@@ -22,17 +22,47 @@ jobs:
       - name: Checkout preview source
         uses: actions/checkout@v4
 
-      - name: Rebuild static site
+      - name: Rebuild and verify static site
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf /tmp/nextcrm-public
           mkdir -p /tmp/nextcrm-public
-          cat preview-payload/part-*.b64 | tr -d '\n\r' | base64 --decode > /tmp/nextcrm-preview.zip
-          echo "8c236be42f51470397cbdf59e760c8f6bc13c19cad852802fcbe54ac0ff56126  /tmp/nextcrm-preview.zip" | sha256sum --check --strict
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          import glob
+          import hashlib
+          import re
+
+          expected = "8c236be42f51470397cbdf59e760c8f6bc13c19cad852802fcbe54ac0ff56126"
+          parts = sorted(glob.glob("preview-payload/part-*.b64"))
+          if len(parts) != 7:
+              raise SystemExit(f"Expected 7 payload parts, found {len(parts)}")
+
+          chunks = []
+          for path in parts:
+              text = Path(path).read_text(encoding="utf-8-sig")
+              clean = re.sub(r"[^A-Za-z0-9+/=]", "", text)
+              print(f"{path}: source={len(text)} clean={len(clean)}")
+              if len(clean) % 4:
+                  raise SystemExit(f"Invalid Base64 length in {path}: {len(clean)}")
+              chunks.append(clean)
+
+          encoded = "".join(chunks)
+          raw = base64.b64decode(encoded, validate=True)
+          actual = hashlib.sha256(raw).hexdigest()
+          print(f"decoded={len(raw)} sha256={actual}")
+          if actual != expected:
+              raise SystemExit(f"Payload checksum mismatch: expected {expected}, got {actual}")
+          Path("/tmp/nextcrm-preview.zip").write_bytes(raw)
+          PY
           unzip -q /tmp/nextcrm-preview.zip -d /tmp/nextcrm-public
           touch /tmp/nextcrm-public/.nojekyll
           printf '%s\n' "Published from ${GITHUB_SHA}" > /tmp/nextcrm-public/PREVIEW_BUILD.txt
           test -f /tmp/nextcrm-public/index.html
+          test -f /tmp/nextcrm-public/product.html
+          test -f /tmp/nextcrm-public/pricing.html
           test -f /tmp/nextcrm-public/assets/styles.css
           test -f /tmp/nextcrm-public/assets/app.js
 
